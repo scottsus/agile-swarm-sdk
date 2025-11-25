@@ -10,6 +10,7 @@ packages = [{include = "agile_ai_sdk", from = "src"}]
 # Core
 python = "^3.10"
 pydantic = "2.12.4"
+pydantic-ai = "^1.22.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.4"
