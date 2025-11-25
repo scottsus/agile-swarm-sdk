@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# get staged Python files
+PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.py$')
+
+# run ruff on Python files
+if [ -n "$PY_FILES" ]; then
+  echo "Running ruff on staged Python files..."
+
+  echo "$PY_FILES" | xargs poetry run ruff format
+  echo "$PY_FILES" | xargs poetry run ruff check --fix
+  echo "$PY_FILES" | xargs git add
+
+  echo "✨ Ruff formatting complete"
+fi
+
+exit 0
