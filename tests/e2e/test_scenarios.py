@@ -9,7 +9,6 @@ from tests.helpers.llm_judge import LLMJudge
 from tests.helpers.workspace_utils import (
     assert_file_exists,
     assert_tests_pass,
-    get_workspace_dir,
 )
 
 
@@ -17,10 +16,11 @@ from tests.helpers.workspace_utils import (
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
-async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Add /health endpoint to FastAPI app with tests."""
 
     task = (
+        "cd fastapi_app && "
         "Add a /health endpoint to the FastAPI app in main.py that returns "
         "{'status': 'healthy', 'version': '1.0.0'}. "
         "Also add a test_health() function in test_main.py that verifies "
@@ -28,22 +28,17 @@ async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: Event
         "Make sure all tests pass by running pytest."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
     event_collector.assert_completed_successfully()
 
-    run_id = event_collector.get_run_id()
-    assert run_id is not None, "No run_id found in events"
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
-
-    assert_file_exists(workspace_dir, "main.py")
-    assert_file_exists(workspace_dir, "test_main.py")
+    assert_file_exists(workspace_dir / "fastapi_app", "main.py")
+    assert_file_exists(workspace_dir / "fastapi_app", "test_main.py")
 
     judge = LLMJudge()
     evaluation = await judge.evaluate_task_completion(
         task=task,
         events=event_collector.events,
-        workspace_dir=workspace_dir,
+        workspace_dir=workspace_dir / "fastapi_app",
     )
 
     assert evaluation.task_completed, (
@@ -53,7 +48,7 @@ async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: Event
         f"Issues: {evaluation.issues_found}"
     )
 
-    assert_tests_pass(workspace_dir, "pytest -v")
+    assert_tests_pass(workspace_dir / "fastapi_app", "pytest -v")
 
     assert_no_errors(event_collector.events)
 
@@ -62,10 +57,11 @@ async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: Event
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
-async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Fix all bugs in broken_code fixture."""
 
     task = (
+        "cd broken_code && "
         "Run pytest on test_buggy.py to see which tests are failing. "
         "You will find that calculate_average() and find_max() in buggy.py "
         "don't handle empty lists correctly. Fix both functions to raise "
@@ -75,23 +71,18 @@ async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventColl
         "After fixing, run the tests again to make sure all tests pass."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
 
     event_collector.assert_completed_successfully()
 
-    run_id = event_collector.get_run_id()
-    assert run_id is not None, "No run_id found in events"
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
-
-    assert_file_exists(workspace_dir, "buggy.py")
-    assert_file_exists(workspace_dir, "test_buggy.py")
+    assert_file_exists(workspace_dir / "broken_code", "buggy.py")
+    assert_file_exists(workspace_dir / "broken_code", "test_buggy.py")
 
     judge = LLMJudge()
     evaluation = await judge.evaluate_task_completion(
         task=task,
         events=event_collector.events,
-        workspace_dir=workspace_dir,
+        workspace_dir=workspace_dir / "broken_code",
     )
 
     assert evaluation.task_completed, (
@@ -101,7 +92,7 @@ async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventColl
         f"Issues: {evaluation.issues_found}"
     )
 
-    assert_tests_pass(workspace_dir, "pytest -v")
+    assert_tests_pass(workspace_dir / "broken_code", "pytest -v")
 
     assert_no_errors(event_collector.events)
 
@@ -110,10 +101,11 @@ async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventColl
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
-async def test_add_feature_with_tests(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_add_feature_with_tests(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Add complete feature with implementation, tests, and documentation."""
 
     task = (
+        "cd simple_python && "
         "Add a divide(a, b) function to calculator.py that returns a / b. "
         "The function should raise ValueError with message 'Cannot divide by zero' "
         "when b is 0. Add a comprehensive docstring following Google style. "
@@ -123,23 +115,18 @@ async def test_add_feature_with_tests(agent_team: AgentTeam, event_collector: Ev
         "Run pytest to make sure all tests pass."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
 
     event_collector.assert_completed_successfully()
 
-    run_id = event_collector.get_run_id()
-    assert run_id is not None, "No run_id found in events"
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
-
-    assert_file_exists(workspace_dir, "calculator.py")
-    assert_file_exists(workspace_dir, "test_calculator.py")
+    assert_file_exists(workspace_dir / "simple_python", "calculator.py")
+    assert_file_exists(workspace_dir / "simple_python", "test_calculator.py")
 
     judge = LLMJudge()
     evaluation = await judge.evaluate_task_completion(
         task=task,
         events=event_collector.events,
-        workspace_dir=workspace_dir,
+        workspace_dir=workspace_dir / "simple_python",
     )
 
     assert evaluation.task_completed, (
@@ -149,6 +136,6 @@ async def test_add_feature_with_tests(agent_team: AgentTeam, event_collector: Ev
         f"Issues: {evaluation.issues_found}"
     )
 
-    assert_tests_pass(workspace_dir, "pytest -v")
+    assert_tests_pass(workspace_dir / "simple_python", "pytest -v")
 
     assert_no_errors(event_collector.events)

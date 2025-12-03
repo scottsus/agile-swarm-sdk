@@ -1,5 +1,7 @@
 import re
+import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 """Workspace filesystem utilities for validating what actually happened.
@@ -15,25 +17,57 @@ Example:
 """
 
 
+def generate_test_run_id() -> str:
+    """Generate unique run ID for test runs."""
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    return f"run_{timestamp}"
+
+
+def create_test_workspace(run_dir: Path, copy_fixtures: bool = True) -> Path:
+    """Create isolated workspace directory for test run.
+
+    Example:
+        >>> workspace = create_test_workspace(run_dir)
+        >>> workspace
+        Path('.agile/runs/run_20231215_143052_123456/fixtures')
+        >>> list(workspace.iterdir())
+        [Path('broken_code'), Path('fastapi_app'), Path('simple_python')]
+    """
+    fixtures_dir = run_dir / "fixtures"
+    fixtures_dir.mkdir(parents=True, exist_ok=True)
+
+    if copy_fixtures:
+        tests_dir = Path(__file__).parent.parent
+        source_fixtures_dir = tests_dir / "e2e" / "fixtures"
+
+        for fixture_subdir in source_fixtures_dir.iterdir():
+            if fixture_subdir.is_dir() and not fixture_subdir.name.startswith("__"):
+                dest = fixtures_dir / fixture_subdir.name
+                shutil.copytree(fixture_subdir, dest, dirs_exist_ok=True)
+
+    return fixtures_dir
+
+
 def get_workspace_dir(base_dir: Path, run_id: str) -> Path:
     """Gets workspace directory for a run.
 
     This function:
     1. constructs the path from base_dir and run_id
-    2. returns the workspace subdirectory path
+    2. returns the workspace directory path
 
     Args:
-        base_dir: Base directory for runs (usually tmp_path / "runs")
+        base_dir: Base directory for runs (usually .agile/runs)
         run_id: Run ID from RUN_STARTED event
 
     Returns:
         Path to workspace directory
 
     Example:
-        >>> workspace = get_workspace_dir(tmp_path / "runs", "abc123")
-        >>> assert workspace == tmp_path / "runs" / "abc123" / "workspace"
+        >>> workspace = get_workspace_dir(base_dir, "run_abc123")
+        >>> assert workspace == base_dir / "run_abc123"
     """
-    return base_dir / run_id / "workspace"
+    return base_dir / run_id
 
 
 def assert_file_exists(workspace_dir: Path, relative_path: str) -> None:
@@ -99,33 +133,3 @@ def assert_tests_pass(workspace_dir: Path, test_command: str = "pytest") -> None
     assert result.returncode == 0, (
         f"Tests failed in workspace.\n" f"stdout: {result.stdout}\n" f"stderr: {result.stderr}"
     )
-
-
-def run_command_in_workspace(workspace_dir: Path, command: str) -> tuple[int, str, str]:
-    """Executes command in workspace and returns result.
-
-    This function:
-    1. runs the command in the workspace directory
-    2. captures stdout, stderr, and return code
-    3. returns all three values
-
-    Returns:
-        Tuple of (returncode, stdout, stderr)
-
-    Example:
-        >>> returncode, stdout, stderr = run_command_in_workspace(
-        ...     workspace_dir,
-        ...     "python script.py"
-        ... )
-        >>> assert returncode == 0
-    """
-    command_parts = command.split()
-    result = subprocess.run(
-        command_parts,
-        cwd=workspace_dir,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-
-    return result.returncode, result.stdout, result.stderr

@@ -1,5 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from pydantic_ai.messages import ModelMessage
 
@@ -50,6 +51,7 @@ class BaseAgent(ABC):
         self.conversation_history: list[ModelMessage] = []
         self._running: bool = False
         self._task: asyncio.Task | None = None
+        self.workspace_dir: Path | None = None
 
     def spawn(self) -> asyncio.Task:
         """Spawns the agent and starts the agent's processing loop as a background task."""
@@ -163,6 +165,13 @@ class BaseAgent(ABC):
             target=self.role,
             content=content,
         )
+
+    def _ensure_workspace(self) -> Path:
+        """Ensure workspace_dir is set."""
+
+        if self.workspace_dir is None:
+            raise RuntimeError(f"workspace_dir not set on {self.role.value} agent")
+        return self.workspace_dir
 
     async def _flush_queue(self, queue: asyncio.Queue[Message]) -> list[Message]:
         """Flush all messages from a queue."""

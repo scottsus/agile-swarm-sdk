@@ -25,13 +25,10 @@ class LLMJudge:
         >>> assert evaluation.confidence > 0.8
     """
 
-    def __init__(self, model: str = "claude-sonnet-4"):
-        """Initialize LLM judge.
+    def __init__(self):
+        """Initialize LLM judge."""
 
-        Args:
-            model: The model to use for evaluation (default: claude-sonnet-4)
-        """
-        self.model = model
+        self.model = "claude-sonnet-4"
         self.agent = Agent(
             default.get_model(),
             output_type=TaskEvaluation,
@@ -40,6 +37,7 @@ class LLMJudge:
 
     def _get_system_prompt(self) -> str:
         """Get system prompt for judge."""
+
         return """You are an expert code reviewer evaluating software development tasks.
 Your role is to objectively assess whether tasks were completed successfully.
 Be precise, fair, and thorough in your evaluations."""

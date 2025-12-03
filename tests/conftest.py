@@ -5,29 +5,57 @@ import pytest
 
 from agile_ai_sdk import AgentTeam
 from tests.helpers.event_collector import EventCollector
+from tests.helpers.workspace_utils import create_test_workspace, generate_test_run_id
 from tests.logging.run_logger import TestRunLogger
 
 
 @pytest.fixture
-def base_dir(tmp_path: Path) -> Path:
-    """Base directory for test runs.
+def run_dir() -> Path:
+    """Create unique run directory for this test.
 
-    This fixture:
-    1. creates a temporary directory for the test run
-    2. returns a path to a 'runs' subdirectory
-    3. automatically cleans up after the test (/tmp)
-
-    Returns:
-        Path to base directory for workspace storage
+    Structure:
+        .agile/runs/run_20251203_135403_386373/
+        ├── fixtures/          # workspace fixtures
+        │   ├── broken_code/
+        │   ├── fastapi_app/
+        │   └── simple_python/
+        └── logs/             # test run logs
+            ├── metadata.json
+            ├── events.jsonl
+            ├── command_outputs/
+            ├── llm_judge/
+            ├── workspace/
+            └── journal.json
 
     Example:
-        >>> def test_something(base_dir):
-        ...     workspace_dir = base_dir / "run_123" / "workspace"
-        ...     workspace_dir.mkdir(parents=True)
+        >>> async def test_something(run_dir):
+        ...     print(run_dir)  # .agile/runs/run_xxx
     """
-    runs_dir = tmp_path / "runs"
-    runs_dir.mkdir(parents=True, exist_ok=True)
-    return runs_dir
+
+    repo_root = Path(__file__).parent.parent
+    base_dir = repo_root / ".agile" / "runs"
+    run_id = generate_test_run_id()
+    run_directory = base_dir / run_id
+    run_directory.mkdir(parents=True, exist_ok=True)
+
+    # Mark the isolation marker for test
+    (run_directory / "test_isolation_marker.txt").write_text(run_id)
+
+    return run_directory
+
+
+@pytest.fixture
+def workspace_dir(run_dir: Path) -> Path:
+    """Create isolated workspace with all fixture directories.
+
+    Returns the fixtures directory within the run directory.
+
+    Example:
+        >>> async def test_something(workspace_dir):
+        ...     # workspace_dir = .agile/runs/run_xxx/fixtures/
+        ...     await team.execute("cd simple_python && ls", workspace_dir=workspace_dir)
+    """
+    return create_test_workspace(run_dir, copy_fixtures=True)
 
 
 @pytest.fixture
@@ -47,14 +75,14 @@ async def agent_team() -> AsyncGenerator[AgentTeam, None]:
         agent.stop()
 
 
-@pytest.fixture
-def test_run_logger(request: pytest.FixtureRequest) -> Generator[TestRunLogger, None, None]:
+@pytest.fixture(autouse=True)
+def test_run_logger(request: pytest.FixtureRequest, run_dir: Path) -> Generator[TestRunLogger, None, None]:
     """Create test run logger for current test.
 
-    This fixture:
+    This fixture runs automatically for all tests and:
     1. extracts test metadata from pytest request
     2. determines test tier from markers (smoke/scenario/feature)
-    3. creates structured log directory at ~/.agile-ai/test-runs/
+    3. creates structured log directory at .agile/runs/run_xxx/logs/
     4. yields TestRunLogger for use in test
     5. finalizes logs with pass/fail status on teardown
 
@@ -68,12 +96,12 @@ def test_run_logger(request: pytest.FixtureRequest) -> Generator[TestRunLogger, 
     Example:
         >>> @pytest.mark.scenario
         ... @pytest.mark.task("Add /health endpoint")
-        ... async def test_health(test_run_logger, event_collector):
+        ... async def test_health(event_collector):
+        ...     # Logger is automatically active
         ...     # Events are automatically logged
         ...     await event_collector.collect_until_done(...)
-        ...     # Logs saved to ~/.agile-ai/test-runs/test_health_{timestamp}/
+        ...     # Logs saved to .agile/runs/run_xxx/logs/
     """
-
     test_name = request.node.name
     test_file = str(request.node.fspath)
 
@@ -86,11 +114,16 @@ def test_run_logger(request: pytest.FixtureRequest) -> Generator[TestRunLogger, 
     task = request.node.get_closest_marker("task")
     task_description = task.args[0] if task else "No task specified"
 
+    log_dir = run_dir / "logs"
+    run_id = run_dir.name
+
     logger = TestRunLogger(
         test_name=test_name,
         test_file=test_file,
         test_tier=tier,
         task=task_description,
+        log_dir=log_dir,
+        run_id=run_id,
     )
 
     yield logger

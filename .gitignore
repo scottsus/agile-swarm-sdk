@@ -58,5 +58,8 @@ dmypy.json
 CLAUDE.md
 chats.db
 
+# Test workspaces
+.agile/
+
 # Environment variables
 .env

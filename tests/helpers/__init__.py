@@ -17,9 +17,9 @@ from tests.helpers.workspace_utils import (
     assert_file_exists,
     assert_file_matches_regex,
     assert_tests_pass,
+    create_test_workspace,
     get_workspace_dir,
     read_file,
-    run_command_in_workspace,
 )
 from tests.logging.run_logger import TestRunLogger
 from tests.logging.run_metadata import TestRunMetadata
@@ -52,7 +52,7 @@ __all__ = [
     "assert_file_exists",
     "assert_file_matches_regex",
     "assert_tests_pass",
+    "create_test_workspace",
     "get_workspace_dir",
     "read_file",
-    "run_command_in_workspace",
 ]

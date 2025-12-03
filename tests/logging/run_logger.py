@@ -31,9 +31,25 @@ class TestRunLogger:
         >>> logger.finalize(result="passed")
     """
 
-    def __init__(self, test_name: str, test_file: str, test_tier: str, task: str, run_id: str | None = None):
-        """Initialize test run logger."""
+    def __init__(
+        self,
+        test_name: str,
+        test_file: str,
+        test_tier: str,
+        task: str,
+        log_dir: Path | None = None,
+        run_id: str | None = None,
+    ):
+        """Initialize test run logger.
 
+        Args:
+            test_name: Name of the test
+            test_file: Path to test file
+            test_tier: Test tier (smoke/scenario/feature)
+            task: Task description
+            log_dir: Custom log directory (if None, uses ~/.agile-ai/test-runs/)
+            run_id: Run ID for metadata
+        """
         self.metadata = TestRunMetadata(
             test_name=test_name,
             test_file=test_file,
@@ -42,7 +58,11 @@ class TestRunLogger:
             run_id=run_id or f"run_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
         )
 
-        self.log_dir = self._create_log_dir()
+        self.log_dir = log_dir if log_dir else self._create_log_dir()
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        (self.log_dir / "command_outputs").mkdir(exist_ok=True)
+        (self.log_dir / "llm_judge").mkdir(exist_ok=True)
+
         self.events_file = self.log_dir / "events.jsonl"
         self.command_counter = 0
 
@@ -91,8 +111,15 @@ class TestRunLogger:
             f.write(json.dumps(event_data, default=_serialize) + "\n")
 
     def log_command_output(self, command: str, stdout: str, stderr: str, returncode: int, duration: float) -> None:
-        """Log command output."""
+        """Log command output.
 
+        TODO: Not currently hooked up. To implement:
+        - Option 1: Emit TOOL_CALL_RESULT events from agents with stdout/stderr/returncode
+        - Option 2: Parse STEP_STARTED events and extract command info (limited data)
+        - See .claude/tasks/command-output-logging/ for full implementation plan
+
+        For now, command execution info is only in events.jsonl as STEP_STARTED events.
+        """
         self.command_counter += 1
         safe_command = command.replace(" ", "_").replace("/", "_").replace("\\", "_")
         filename = f"{self.command_counter:03d}_{safe_command[:30]}.txt"

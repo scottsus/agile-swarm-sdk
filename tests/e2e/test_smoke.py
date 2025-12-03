@@ -88,7 +88,7 @@ async def test_event_has_required_fields(agent_team: AgentTeam, event_collector:
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_workspace_isolation() -> None:
+async def test_workspace_isolation(workspace_dir: Path) -> None:
     """Workspace is isolated from host directory."""
 
     team = AgentTeam()
@@ -96,10 +96,15 @@ async def test_workspace_isolation() -> None:
 
     test_filename = "test_isolation_marker.txt"
 
-    await collector.collect_until_done(team.execute(f"Create a file called {test_filename} with content 'isolated'"))
+    await collector.collect_until_done(
+        team.execute(f"Create a file called {test_filename} with content 'isolated'", workspace_dir=workspace_dir)
+    )
 
     host_file = Path.cwd() / test_filename
     assert not host_file.exists(), f"File {test_filename} should not be in host directory"
+
+    workspace_file = workspace_dir / test_filename
+    assert workspace_file.exists(), f"File {test_filename} should exist in workspace"
 
 
 @pytest.mark.smoke

@@ -6,7 +6,6 @@ from agile_ai_sdk import AgentTeam
 from tests.helpers.event_collector import EventCollector
 from tests.helpers.workspace_utils import (
     assert_file_exists,
-    get_workspace_dir,
     read_file,
 )
 
@@ -15,7 +14,7 @@ from tests.helpers.workspace_utils import (
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(180)
-async def test_create_new_file(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_create_new_file(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Agent creates a new file with specific content.
 
     This test:
@@ -30,13 +29,9 @@ async def test_create_new_file(agent_team: AgentTeam, event_collector: EventColl
         "multiply(a, b) that returns a * b. Include a docstring."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
     event_collector.assert_completed_successfully()
 
-    run_id = event_collector.get_run_id()
-    assert run_id is not None
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
     assert_file_exists(workspace_dir, "multiply.py")
 
     content = read_file(workspace_dir, "multiply.py")
@@ -48,7 +43,7 @@ async def test_create_new_file(agent_team: AgentTeam, event_collector: EventColl
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(180)
-async def test_modify_existing_file(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_modify_existing_file(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Agent modifies an existing file.
 
     This test:
@@ -59,20 +54,17 @@ async def test_modify_existing_file(agent_team: AgentTeam, event_collector: Even
     """
 
     task = (
+        "cd simple_python && "
         "In calculator.py, add a new function multiply(a, b) that returns a * b. "
         "Make sure to keep the existing add() and subtract() functions."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
     event_collector.assert_completed_successfully()
 
-    run_id = event_collector.get_run_id()
-    assert run_id is not None
+    assert_file_exists(workspace_dir / "simple_python", "calculator.py")
 
-    workspace_dir = get_workspace_dir(base_dir, run_id)
-    assert_file_exists(workspace_dir, "calculator.py")
-
-    content = read_file(workspace_dir, "calculator.py")
+    content = read_file(workspace_dir / "simple_python", "calculator.py")
     assert "def add" in content
     assert "def subtract" in content
     assert "def multiply" in content
@@ -82,7 +74,7 @@ async def test_modify_existing_file(agent_team: AgentTeam, event_collector: Even
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(180)
-async def test_read_file_contents(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_read_file_contents(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Agent reads and uses file contents.
 
     This test:
@@ -91,22 +83,20 @@ async def test_read_file_contents(agent_team: AgentTeam, event_collector: EventC
     3. validates agent created summary based on file contents
     4. checks summary accuracy
     """
+
     task = (
+        "cd simple_python && "
         "Read calculator.py and create a file called functions.txt that lists "
         "all the function names defined in calculator.py, one per line."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
 
     event_collector.assert_completed_successfully()
 
-    run_id = event_collector.get_run_id()
-    assert run_id is not None
+    assert_file_exists(workspace_dir / "simple_python", "functions.txt")
 
-    workspace_dir = get_workspace_dir(base_dir, run_id)
-    assert_file_exists(workspace_dir, "functions.txt")
-
-    content = read_file(workspace_dir, "functions.txt")
+    content = read_file(workspace_dir / "simple_python", "functions.txt")
     assert "add" in content.lower()
     assert "subtract" in content.lower()
 
@@ -115,7 +105,7 @@ async def test_read_file_contents(agent_team: AgentTeam, event_collector: EventC
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(180)
-async def test_fix_bug(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_fix_bug(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Agent fixes a bug in code.
 
     This test:
@@ -124,22 +114,18 @@ async def test_fix_bug(agent_team: AgentTeam, event_collector: EventCollector, b
     3. verifies bug was fixed
     4. validates fix doesn't break existing functionality
     """
+
     task = (
+        "cd broken_code && "
         "In buggy.py, fix the calculate_average() function to handle empty lists "
         "by raising a ValueError with message 'Cannot calculate average of empty list'. "
         "Make sure the tests pass after the fix."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
 
-    run_id = event_collector.get_run_id()
-    if run_id is None:
-        return
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
-
-    if (workspace_dir / "buggy.py").exists():
-        content = read_file(workspace_dir, "buggy.py")
+    if (workspace_dir / "broken_code" / "buggy.py").exists():
+        content = read_file(workspace_dir / "broken_code", "buggy.py")
         assert "ValueError" in content or "raise" in content or "if not" in content or "len(numbers)" in content
 
 
@@ -147,7 +133,7 @@ async def test_fix_bug(agent_team: AgentTeam, event_collector: EventCollector, b
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(180)
-async def test_execute_code(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_execute_code(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Agent executes code.
 
     This test:
@@ -156,18 +142,13 @@ async def test_execute_code(agent_team: AgentTeam, event_collector: EventCollect
     3. validates script was executed
     4. checks output was captured
     """
+
     task = (
         "Create a Python script hello.py that prints 'Hello from test!', "
         "then run it and save the output to output.txt."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
-
-    run_id = event_collector.get_run_id()
-    if run_id is None:
-        return
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
 
     if (workspace_dir / "hello.py").exists():
         assert_file_exists(workspace_dir, "hello.py")
@@ -183,7 +164,7 @@ async def test_execute_code(agent_team: AgentTeam, event_collector: EventCollect
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(180)
-async def test_implement_and_test(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_implement_and_test(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Agent implements code and runs tests.
 
     This test:
@@ -192,26 +173,22 @@ async def test_implement_and_test(agent_team: AgentTeam, event_collector: EventC
     3. validates tests were created
     4. checks all tests pass
     """
+
     task = (
+        "cd simple_python && "
         "Add a power(base, exponent) function to calculator.py that returns base ** exponent. "
         "Also add a test_power() function in test_calculator.py that tests this function "
         "with at least 2 test cases. Make sure the tests pass."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
 
-    run_id = event_collector.get_run_id()
-    if run_id is None:
-        return
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
-
-    if (workspace_dir / "calculator.py").exists():
-        calc_content = read_file(workspace_dir, "calculator.py")
+    if (workspace_dir / "simple_python" / "calculator.py").exists():
+        calc_content = read_file(workspace_dir / "simple_python", "calculator.py")
         assert "def power" in calc_content
 
-    if (workspace_dir / "test_calculator.py").exists():
-        test_content = read_file(workspace_dir, "test_calculator.py")
+    if (workspace_dir / "simple_python" / "test_calculator.py").exists():
+        test_content = read_file(workspace_dir / "simple_python", "test_calculator.py")
         assert "test_power" in test_content or "def test" in test_content
 
 
@@ -219,7 +196,7 @@ async def test_implement_and_test(agent_team: AgentTeam, event_collector: EventC
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(180)
-async def test_multiple_file_changes(agent_team: AgentTeam, event_collector: EventCollector, base_dir: Path) -> None:
+async def test_multiple_file_changes(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
     """Agent modifies multiple files.
 
     This test:
@@ -228,19 +205,14 @@ async def test_multiple_file_changes(agent_team: AgentTeam, event_collector: Eve
     3. validates changes are consistent
     4. checks files work together
     """
+
     task = (
         "Create two files: math_utils.py with a square(x) function, "
         "and test_math_utils.py with tests for the square function. "
         "Make sure the tests import correctly and pass."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task))
-
-    run_id = event_collector.get_run_id()
-    if run_id is None:
-        return
-
-    workspace_dir = get_workspace_dir(base_dir, run_id)
+    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
 
     if (workspace_dir / "math_utils.py").exists():
         assert_file_exists(workspace_dir, "math_utils.py")

@@ -123,7 +123,7 @@ class EngineeringManager(BaseAgent):
 
         user_prompt = "\n".join([f"[{msg.source.value}]: {msg.content}" for msg in messages])
 
-        deps = AgentDeps(router=self.router, event_stream=self.event_stream)
+        deps = AgentDeps(router=self.router, event_stream=self.event_stream, workspace_dir=self._ensure_workspace())
 
         try:
             result = await self.ai_agent.run(user_prompt, message_history=self.conversation_history, deps=deps)
