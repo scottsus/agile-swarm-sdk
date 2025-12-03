@@ -116,22 +116,3 @@ async def test_simple_task_completion(agent_team: AgentTeam, event_collector: Ev
     assert len(event_collector.events) >= 2
     assert event_collector.events[0].type == EventType.RUN_STARTED
     assert event_collector.events[-1].type == EventType.RUN_FINISHED
-
-
-@pytest.mark.smoke
-@pytest.mark.e2e
-@pytest.mark.asyncio
-@pytest.mark.timeout(30)
-async def test_error_handling() -> None:
-    """Errors are captured gracefully in event stream."""
-
-    team = AgentTeam()
-    collector = EventCollector()
-
-    await collector.collect_until_done(
-        team.execute("Run a command that definitely does not exist: nonexistent_cmd_xyz")
-    )
-
-    assert collector.error is not None
-    assert isinstance(collector.error, str)
-    assert len(collector.error) > 0

@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Any
 
 from agile_ai_sdk.agents import Developer, EngineeringManager, Planner, SeniorReviewer
 from agile_ai_sdk.agents.base import BaseAgent
@@ -74,16 +75,28 @@ class AgentTeam:
 
         await self.agents[AgentRole.EM].drop_in_inbox(source=HumanRole.USER, content=task)
 
-        agent_tasks = [asyncio.create_task(agent.start()) for agent in self.agents.values()]
+        agent_tasks = [agent.spawn() for agent in self.agents.values()]
 
-        async for event in self.event_stream:
-            yield event
+        try:
+            async for event in self.event_stream:
+                yield event
 
-            if event.type in (EventType.RUN_ERROR, EventType.RUN_FINISHED):
-                break
+                if event.type in (EventType.RUN_ERROR, EventType.RUN_FINISHED):
+                    self.event_stream.close()
+                    break
+
+        finally:
+            await self._teardown(agent_tasks)
+
+    async def _teardown(self, agent_tasks: list[asyncio.Task[Any]]):
+        """Cleans up dangling resources"""
+
+        self.event_stream.close()
 
         for agent in self.agents.values():
             agent.stop()
 
-        await asyncio.gather(*agent_tasks)
-        self.event_stream.close()
+        try:
+            await asyncio.wait_for(asyncio.gather(*agent_tasks, return_exceptions=True), timeout=5.0)
+        except asyncio.TimeoutError:
+            pass

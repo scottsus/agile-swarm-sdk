@@ -31,7 +31,7 @@ def base_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def agent_team() -> AgentTeam:
+async def agent_team() -> AsyncGenerator[AgentTeam, None]:
     """Fresh AgentTeam instance per test.
 
     Example:
@@ -40,7 +40,11 @@ def agent_team() -> AgentTeam:
         ...         agent_team.execute("List files")
         ...     )
     """
-    return AgentTeam()
+    team = AgentTeam()
+    yield team
+
+    for agent in team.agents.values():
+        agent.stop()
 
 
 @pytest.fixture
