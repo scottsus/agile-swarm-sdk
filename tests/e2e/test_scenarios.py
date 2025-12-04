@@ -16,7 +16,9 @@ from tests.helpers.workspace_utils import (
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
-async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
+async def test_add_health_endpoint(
+    agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path, test_run_logger
+) -> None:
     """Add /health endpoint to FastAPI app with tests."""
 
     task = (
@@ -35,10 +37,11 @@ async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: Event
     assert_file_exists(workspace_dir / "fastapi_app", "test_main.py")
 
     judge = LLMJudge()
-    evaluation = await judge.evaluate_task_completion(
+    evaluation = await judge.evaluate_and_log(
         task=task,
         events=event_collector.events,
         workspace_dir=workspace_dir / "fastapi_app",
+        test_run_logger=test_run_logger,
     )
 
     assert evaluation.task_completed, (
@@ -57,7 +60,9 @@ async def test_add_health_endpoint(agent_team: AgentTeam, event_collector: Event
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
-async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
+async def test_fix_broken_code(
+    agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path, test_run_logger
+) -> None:
     """Fix all bugs in broken_code fixture."""
 
     task = (
@@ -79,10 +84,11 @@ async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventColl
     assert_file_exists(workspace_dir / "broken_code", "test_buggy.py")
 
     judge = LLMJudge()
-    evaluation = await judge.evaluate_task_completion(
+    evaluation = await judge.evaluate_and_log(
         task=task,
         events=event_collector.events,
         workspace_dir=workspace_dir / "broken_code",
+        test_run_logger=test_run_logger,
     )
 
     assert evaluation.task_completed, (
@@ -101,7 +107,9 @@ async def test_fix_broken_code(agent_team: AgentTeam, event_collector: EventColl
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
-async def test_add_feature_with_tests(agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path) -> None:
+async def test_add_feature_with_tests(
+    agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path, test_run_logger
+) -> None:
     """Add complete feature with implementation, tests, and documentation."""
 
     task = (
@@ -123,10 +131,11 @@ async def test_add_feature_with_tests(agent_team: AgentTeam, event_collector: Ev
     assert_file_exists(workspace_dir / "simple_python", "test_calculator.py")
 
     judge = LLMJudge()
-    evaluation = await judge.evaluate_task_completion(
+    evaluation = await judge.evaluate_and_log(
         task=task,
         events=event_collector.events,
         workspace_dir=workspace_dir / "simple_python",
+        test_run_logger=test_run_logger,
     )
 
     assert evaluation.task_completed, (

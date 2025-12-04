@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from agile_ai_sdk.models.event import Event
+from tests.helpers.time_utils import timestamp_compact, timestamp_iso, timestamp_readable, utcnow
 from tests.logging.run_metadata import TestRunMetadata
 
 
@@ -55,13 +56,12 @@ class TestRunLogger:
             test_file=test_file,
             test_tier=test_tier,
             task=task,
-            run_id=run_id or f"run_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+            run_id=run_id or f"run_{timestamp_compact()}",
         )
 
         self.log_dir = log_dir if log_dir else self._create_log_dir()
         self.log_dir.mkdir(parents=True, exist_ok=True)
         (self.log_dir / "command_outputs").mkdir(exist_ok=True)
-        (self.log_dir / "llm_judge").mkdir(exist_ok=True)
 
         self.events_file = self.log_dir / "events.jsonl"
         self.command_counter = 0
@@ -72,7 +72,7 @@ class TestRunLogger:
         """Create log directory for this test run."""
 
         base_dir = Path.home() / ".agile-ai" / "test-runs"
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = timestamp_readable()
         log_dir = base_dir / f"{self.metadata.test_name}_{timestamp}"
         log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -103,7 +103,7 @@ class TestRunLogger:
 
         with open(self.events_file, "a") as f:
             event_data = {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": timestamp_iso(),
                 "type": event.type.value,
                 "agent": event.agent.value,
                 "data": event.data,
@@ -134,21 +134,15 @@ class TestRunLogger:
             f.write("\n=== STDERR ===\n")
             f.write(stderr)
 
-    def log_llm_judge_evaluation(
-        self, evaluation_type: str, result: dict[str, Any], files_analyzed: list[str], model_used: str
-    ) -> None:
-        """Log LLM judge evaluation."""
+    def log_llm_judge_evaluation(self, evaluation_markdown: str) -> None:
+        """Log LLM judge evaluation in markdown format."""
 
-        eval_path = self.log_dir / "llm_judge" / f"{evaluation_type}.json"
-        evaluation_data = {
-            "evaluation_type": evaluation_type,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "result": result,
-            "files_analyzed": files_analyzed,
-            "model_used": model_used,
-        }
+        eval_path = self.log_dir / "llm_judge.md"
+        eval_path.parent.mkdir(parents=True, exist_ok=True)
+
         with open(eval_path, "w") as f:
-            json.dump(evaluation_data, f, indent=2)
+            f.write(f"# LLM Judge Evaluation - {timestamp_iso()}\n\n")
+            f.write(evaluation_markdown)
 
     def save_workspace(self, workspace_dir: Path) -> None:
         """Copy workspace to log directory."""
@@ -168,9 +162,9 @@ class TestRunLogger:
         """Finalize the test run log."""
 
         start = datetime.fromisoformat(self.metadata.start_time.rstrip("Z"))
-        end = datetime.utcnow()
+        end = utcnow()
 
-        self.metadata.end_time = end.isoformat() + "Z"
+        self.metadata.end_time = timestamp_iso()
         self.metadata.duration_seconds = (end - start).total_seconds()
         self.metadata.result = result
         self.metadata.error = error

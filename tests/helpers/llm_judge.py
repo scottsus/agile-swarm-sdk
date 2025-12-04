@@ -1,10 +1,14 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic_ai import Agent
 
 from agile_ai_sdk.llm import default
 from agile_ai_sdk.models import Event, EventType
 from tests.types.evaluations import CodeQualityEvaluation, TaskEvaluation
+
+if TYPE_CHECKING:
+    from tests.logging.run_logger import TestRunLogger
 
 
 class LLMJudge:
@@ -162,6 +166,44 @@ Be precise, fair, and thorough in your evaluations."""
         result = await agent.run(prompt)
         return result.output
 
+    async def evaluate_and_log(
+        self,
+        test_run_logger: "TestRunLogger",
+        task: str,
+        events: list[Event],
+        workspace_dir: Path,
+    ) -> TaskEvaluation:
+        """Evaluate task completion and log results to markdown.
+
+        This is a convenience method that:
+        1. evaluates the task completion
+        2. converts to markdown format
+        3. logs via test_run_logger
+        4. returns the original TaskEvaluation for assertions
+
+        Example:
+            >>> judge = LLMJudge()
+            >>> evaluation = await judge.evaluate_and_log(
+            ...     test_run_logger=test_run_logger,
+            ...     task="Add /health endpoint",
+            ...     events=event_collector.events,
+            ...     workspace_dir=workspace_dir / "fastapi_app"
+            ... )
+            >>> assert evaluation.task_completed
+        """
+
+        evaluation = await self.evaluate_task_completion(
+            task=task,
+            events=events,
+            workspace_dir=workspace_dir,
+        )
+
+        markdown = self._task_evaluation_to_markdown(task, evaluation, workspace_dir)
+
+        test_run_logger.log_llm_judge_evaluation(markdown)
+
+        return evaluation
+
     def _extract_event_summary(self, events: list[Event]) -> str:
         """Extract a concise summary of events for LLM evaluation.
 
@@ -254,3 +296,83 @@ Be precise, fair, and thorough in your evaluations."""
         """Check if path should be ignored."""
         ignore_patterns = ["__pycache__", ".pyc", ".git", ".pytest_cache"]
         return any(pattern in str(path) for pattern in ignore_patterns)
+
+    def _extract_expected_from_task(self, task: str) -> str:
+        """Extract expected outcome from task description.
+
+        TODO: improve this heuristic
+        Simple heuristic - first sentence or first 150 chars.
+        """
+
+        sentences = task.split(". ")
+        if sentences:
+            return sentences[0]
+        return task[:150]
+
+    def _format_list_as_bullets(self, items: list[str] | None) -> str:
+        """Format list of strings as markdown bullet points."""
+
+        if not items:
+            return "  - None"
+        return "\n".join(f"  - {item}" for item in items)
+
+    def _task_evaluation_to_markdown(
+        self,
+        task: str,
+        evaluation: TaskEvaluation,
+        workspace_dir: Path,
+    ) -> str:
+        """Convert TaskEvaluation to markdown format.
+
+        This method:
+        1. extracts input (task description)
+        2. infers expected output from task
+        3. formats score as percentage
+        4. includes judge's explanation and reasoning
+        5. adds metadata about completion status and suggestions
+
+        Note: Actual output is captured in events.jsonl; this focuses on evaluation quality.
+
+        Returns markdown string ready to write to file.
+        """
+
+        markdown = f"""## Task Completion Evaluation
+
+**Input**: {task}
+
+**Expected Output**: {self._extract_expected_from_task(task)}
+
+**Score**: {evaluation.confidence:.1%}
+
+**Judge's Assessment**: {evaluation.reasoning}
+
+### Additional Details
+
+- **Task Completed**: {evaluation.task_completed}
+- **Issues Found**:
+{self._format_list_as_bullets(evaluation.issues_found)}
+- **Suggestions**:
+{self._format_list_as_bullets(evaluation.suggestions)}
+"""
+
+        return markdown
+
+    def _code_quality_evaluation_to_markdown(
+        self,
+        files: list[Path],
+        criteria: list[str],
+        evaluation: CodeQualityEvaluation,
+    ) -> str:
+        """Convert CodeQualityEvaluation to markdown format."""
+
+        lines = ["## Code Quality Evaluation\n"]
+
+        for criterion in criteria:
+            passed = evaluation.criteria_results.get(criterion, False)
+            status = "✓ Pass" if passed else "✗ Fail"
+            lines.append(f"### {criterion}: {status}\n")
+
+        lines.append("\n**Overall Assessment**: " + evaluation.reasoning)
+        lines.append(f"\n**Files Checked**: {', '.join(f.name for f in files[:5])}")
+
+        return "\n".join(lines)
