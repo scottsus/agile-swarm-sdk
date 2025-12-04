@@ -66,6 +66,7 @@ class Developer(BaseAgent):
                     command,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    cwd=str(self._ensure_workspace()),
                 )
 
                 stdout, stderr = await asyncio.wait_for(
@@ -116,7 +117,7 @@ class Developer(BaseAgent):
 
         task = "\n".join([f"[{msg.source.value}]: {msg.content}" for msg in messages])
 
-        deps = AgentDeps(router=self.router, event_stream=self.event_stream)
+        deps = AgentDeps(router=self.router, event_stream=self.event_stream, workspace_dir=self._ensure_workspace())
         result = await self.ai_agent.run(task, message_history=self.conversation_history, deps=deps)
         self.conversation_history.extend(result.new_messages())
 

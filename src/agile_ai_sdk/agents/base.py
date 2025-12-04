@@ -1,5 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from pydantic_ai.messages import ModelMessage
 
@@ -49,6 +50,14 @@ class BaseAgent(ABC):
         # State
         self.conversation_history: list[ModelMessage] = []
         self._running: bool = False
+        self._task: asyncio.Task | None = None
+        self.workspace_dir: Path | None = None
+
+    def spawn(self) -> asyncio.Task:
+        """Spawns the agent and starts the agent's processing loop as a background task."""
+
+        self._task = asyncio.create_task(self.start())
+        return self._task
 
     async def start(self) -> None:
         """Start the agent's processing loop."""
@@ -68,53 +77,67 @@ class BaseAgent(ABC):
     async def run_loop(self) -> None:
         """Main agent processing loop."""
 
-        while self._running:
-            try:
-                messages: list[Message] = []
+        try:
+            while self._running:
+                try:
+                    messages: list[Message] = []
 
-                # Prioritize interrupts
-                if not self.interrupt_queue.empty():
-                    messages = await self._flush_queue(self.interrupt_queue)
+                    # Prioritize interrupts
+                    if not self.interrupt_queue.empty():
+                        messages = await self._flush_queue(self.interrupt_queue)
 
-                elif not self.inbox.empty():
-                    messages = await self._flush_queue(self.inbox)
+                    elif not self.inbox.empty():
+                        messages = await self._flush_queue(self.inbox)
 
-                else:
-                    await asyncio.sleep(0.1)
-                    continue
+                    else:
+                        await asyncio.sleep(0.1)
+                        continue
 
-                if messages:
-                    # Log received messages
-                    await self.event_stream.emit(
-                        Event(
-                            type=EventType.TEXT_MESSAGE_CONTENT,
-                            agent=self.role,
-                            data={"message": f"📨 Received {len(messages)} message(s)"},
-                        )
-                    )
-
-                    for i, msg in enumerate(messages, 1):
+                    if messages:
+                        # Log received messages
                         await self.event_stream.emit(
                             Event(
                                 type=EventType.TEXT_MESSAGE_CONTENT,
                                 agent=self.role,
-                                data={
-                                    "message": f"  Message {i}: from={msg.source.value}, content='{msg.content}', priority={msg.priority.value}"
-                                },
+                                data={"message": f"📨 Received {len(messages)} message(s)"},
                             )
                         )
 
-                    await self.process_messages(messages)
+                        for i, msg in enumerate(messages, 1):
+                            await self.event_stream.emit(
+                                Event(
+                                    type=EventType.TEXT_MESSAGE_CONTENT,
+                                    agent=self.role,
+                                    data={
+                                        "message": f"  Message {i}: from={msg.source.value}, content='{msg.content}', priority={msg.priority.value}"
+                                    },
+                                )
+                            )
 
-            except Exception as e:
-                await self.event_stream.emit(
-                    Event(
-                        type=EventType.RUN_ERROR,
-                        agent=self.role,
-                        data=ErrorData(error=str(e)).model_dump(),
+                        await self.process_messages(messages)
+
+                except Exception as e:
+                    await self.event_stream.emit(
+                        Event(
+                            type=EventType.RUN_ERROR,
+                            agent=self.role,
+                            data=ErrorData(error=str(e)).model_dump(),
+                        )
                     )
+                    break
+
+        except asyncio.CancelledError:
+            await self.event_stream.emit(
+                Event(
+                    type=EventType.STEP_FINISHED,
+                    agent=self.role,
+                    data={"status": "Agent cancelled"},
                 )
-                break
+            )
+            raise
+
+        finally:
+            self._running = False
 
     @abstractmethod
     async def process_messages(self, messages: list[Message]) -> None:
@@ -143,6 +166,13 @@ class BaseAgent(ABC):
             content=content,
         )
 
+    def _ensure_workspace(self) -> Path:
+        """Ensure workspace_dir is set."""
+
+        if self.workspace_dir is None:
+            raise RuntimeError(f"workspace_dir not set on {self.role.value} agent")
+        return self.workspace_dir
+
     async def _flush_queue(self, queue: asyncio.Queue[Message]) -> list[Message]:
         """Flush all messages from a queue."""
 
@@ -156,3 +186,6 @@ class BaseAgent(ABC):
         """Stop the agent's processing loop."""
 
         self._running = False
+
+        if self._task is not None and not self._task.done():
+            self._task.cancel()

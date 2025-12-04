@@ -1,5 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Any
 
 from agile_ai_sdk.agents import Developer, EngineeringManager, Planner, SeniorReviewer
 from agile_ai_sdk.agents.base import BaseAgent
@@ -67,23 +69,44 @@ class AgentTeam:
 
         return agent_class(self.router, self.event_stream)
 
-    async def execute(self, task: str) -> AsyncIterator[Event]:
+    async def execute(self, task: str, workspace_dir: Path | None = None) -> AsyncIterator[Event]:
         """Execute a task with the agent team."""
+
+        if workspace_dir is None:
+            workspace_dir = Path.cwd()
+
+        for agent in self.agents.values():
+            agent.workspace_dir = workspace_dir
 
         await self.event_stream.emit(Event(type=EventType.RUN_STARTED, agent=AgentRole.EM, data={"task": task}))
 
         await self.agents[AgentRole.EM].drop_in_inbox(source=HumanRole.USER, content=task)
 
-        agent_tasks = [asyncio.create_task(agent.start()) for agent in self.agents.values()]
+        agent_tasks = [agent.spawn() for agent in self.agents.values()]
 
-        async for event in self.event_stream:
-            yield event
+        try:
+            async for event in self.event_stream:
+                yield event
 
-            if event.type in (EventType.RUN_ERROR, EventType.RUN_FINISHED):
-                break
+                if event.type in (EventType.RUN_ERROR, EventType.RUN_FINISHED):
+                    self.event_stream.close()
+                    break
+
+        finally:
+            await self._teardown(agent_tasks)
+
+    async def _teardown(self, agent_tasks: list[asyncio.Task[Any]]):
+        """Cleans up dangling resources"""
+
+        self.event_stream.close()
 
         for agent in self.agents.values():
             agent.stop()
 
-        await asyncio.gather(*agent_tasks)
-        self.event_stream.close()
+        try:
+            await asyncio.wait_for(asyncio.gather(*agent_tasks, return_exceptions=True), timeout=5.0)
+
+        except asyncio.TimeoutError:
+            for task in agent_tasks:
+                if not task.done():
+                    task.cancel()

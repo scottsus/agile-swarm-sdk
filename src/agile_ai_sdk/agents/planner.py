@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_ai import Agent, RunContext
 
 from agile_ai_sdk.agents.base import BaseAgent
@@ -58,7 +60,7 @@ class Planner(BaseAgent):
 
         user_prompt = "\n".join([f"[{msg.source.value}]: {msg.content}" for msg in messages])
 
-        deps = AgentDeps(router=self.router, event_stream=self.event_stream)
+        deps = AgentDeps(router=self.router, event_stream=self.event_stream, workspace_dir=self._ensure_workspace())
         result = await self.ai_agent.run(user_prompt, message_history=self.conversation_history, deps=deps)
         self.conversation_history.extend(result.new_messages())
 

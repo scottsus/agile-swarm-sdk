@@ -10,7 +10,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -58,3 +57,9 @@ dmypy.json
 *.log
 CLAUDE.md
 chats.db
+
+# Test workspaces
+.agile/
+
+# Environment variables
+.env
