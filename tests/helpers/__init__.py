@@ -23,7 +23,6 @@ from tests.helpers.workspace_utils import (
 )
 from tests.logging.run_logger import TestRunLogger
 from tests.logging.run_metadata import TestRunMetadata
-from tests.logging.run_reader import TestRunLog
 
 __all__ = [
     # Assertions
@@ -44,7 +43,6 @@ __all__ = [
     "LLMJudge",
     "TaskEvaluation",
     # Test logger
-    "TestRunLog",
     "TestRunLogger",
     "TestRunMetadata",
     # Workspace utilities

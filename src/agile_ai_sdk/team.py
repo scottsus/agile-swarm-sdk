@@ -105,5 +105,8 @@ class AgentTeam:
 
         try:
             await asyncio.wait_for(asyncio.gather(*agent_tasks, return_exceptions=True), timeout=5.0)
+
         except asyncio.TimeoutError:
-            pass
+            for task in agent_tasks:
+                if not task.done():
+                    task.cancel()
