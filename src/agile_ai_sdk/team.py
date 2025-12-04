@@ -7,10 +7,11 @@ from agile_ai_sdk.agents import Developer, EngineeringManager, Planner, SeniorRe
 from agile_ai_sdk.agents.base import BaseAgent
 from agile_ai_sdk.core.events import EventStream
 from agile_ai_sdk.core.router import MessageRouter
+from agile_ai_sdk.executor import TaskExecutor
 from agile_ai_sdk.models import AgentRole, Event, EventType, HumanRole
 
 
-class AgentTeam:
+class AgentTeam(TaskExecutor):
     """Main entry point for executing tasks with an agent team.
 
     Example:

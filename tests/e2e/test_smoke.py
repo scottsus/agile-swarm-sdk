@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agile_ai_sdk import AgentTeam, EventType
+from agile_ai_sdk import AgentTeam, EventType, TaskExecutor
 from tests.helpers.assertions import assert_contains_event_data, assert_event_count
 from tests.helpers.event_collector import EventCollector
 
@@ -24,10 +24,10 @@ async def test_agent_team_initialization() -> None:
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_execute_returns_stream(agent_team: AgentTeam) -> None:
+async def test_execute_returns_stream(executor: TaskExecutor) -> None:
     """execute() returns async iterator."""
 
-    stream = agent_team.execute("Echo 'hello'")
+    stream = executor.execute("Echo 'hello'")
 
     assert hasattr(stream, "__aiter__")
     assert hasattr(stream, "__anext__")
@@ -37,10 +37,10 @@ async def test_execute_returns_stream(agent_team: AgentTeam) -> None:
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_run_started_event(agent_team: AgentTeam, event_collector: EventCollector) -> None:
+async def test_run_started_event(executor: TaskExecutor, event_collector: EventCollector) -> None:
     """RUN_STARTED event is emitted with correct task data."""
 
-    await event_collector.collect_until_done(agent_team.execute("List files"))
+    await event_collector.collect_until_done(executor.execute("List files"))
 
     assert event_collector.has_event_type(EventType.RUN_STARTED)
     assert_event_count(event_collector.events, EventType.RUN_STARTED, 1)
@@ -53,10 +53,10 @@ async def test_run_started_event(agent_team: AgentTeam, event_collector: EventCo
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_run_finished_event(agent_team: AgentTeam, event_collector: EventCollector) -> None:
+async def test_run_finished_event(executor: TaskExecutor, event_collector: EventCollector) -> None:
     """RUN_FINISHED event is emitted on completion."""
 
-    await event_collector.collect_until_done(agent_team.execute("Echo 'test'"))
+    await event_collector.collect_until_done(executor.execute("Echo 'test'"))
 
     assert event_collector.completed
     assert event_collector.has_event_type(EventType.RUN_FINISHED)
@@ -69,10 +69,10 @@ async def test_run_finished_event(agent_team: AgentTeam, event_collector: EventC
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_event_has_required_fields(agent_team: AgentTeam, event_collector: EventCollector) -> None:
+async def test_event_has_required_fields(executor: TaskExecutor, event_collector: EventCollector) -> None:
     """Events have all required fields with correct types."""
 
-    await event_collector.collect_until_done(agent_team.execute("Print 'hello'"))
+    await event_collector.collect_until_done(executor.execute("Print 'hello'"))
 
     assert len(event_collector.events) > 0
 
@@ -88,16 +88,17 @@ async def test_event_has_required_fields(agent_team: AgentTeam, event_collector:
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_workspace_isolation(workspace_dir: Path) -> None:
+async def test_workspace_isolation(executor: TaskExecutor, workspace_dir: Path) -> None:
     """Workspace is isolated from host directory."""
 
-    team = AgentTeam()
     collector = EventCollector()
 
     test_filename = "test_isolation_marker.txt"
 
     await collector.collect_until_done(
-        team.execute(f"Create a file called {test_filename} with content 'isolated'", workspace_dir=workspace_dir)
+        executor.execute(
+            f"Create a file called {test_filename} with content 'isolated'", workspace_dir=workspace_dir
+        )
     )
 
     host_file = Path.cwd() / test_filename
@@ -111,10 +112,10 @@ async def test_workspace_isolation(workspace_dir: Path) -> None:
 @pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.timeout(30)
-async def test_simple_task_completion(agent_team: AgentTeam, event_collector: EventCollector) -> None:
+async def test_simple_task_completion(executor: TaskExecutor, event_collector: EventCollector) -> None:
     """Agent completes a trivial task successfully."""
 
-    await event_collector.collect_until_done(agent_team.execute("Echo 'Hello, World!'"))
+    await event_collector.collect_until_done(executor.execute("Echo 'Hello, World!'"))
 
     event_collector.assert_completed_successfully()
 

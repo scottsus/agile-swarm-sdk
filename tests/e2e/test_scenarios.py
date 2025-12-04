@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agile_ai_sdk import AgentTeam
+from agile_ai_sdk import TaskExecutor
 from tests.helpers.assertions import assert_no_errors
 from tests.helpers.event_collector import EventCollector
 from tests.helpers.llm_judge import LLMJudge
@@ -17,7 +17,7 @@ from tests.helpers.workspace_utils import (
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
 async def test_add_health_endpoint(
-    agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path, test_run_logger
+    executor: TaskExecutor, event_collector: EventCollector, workspace_dir: Path, test_run_logger
 ) -> None:
     """Add /health endpoint to FastAPI app with tests."""
 
@@ -30,7 +30,7 @@ async def test_add_health_endpoint(
         "Make sure all tests pass by running pytest."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
+    await event_collector.collect_until_done(executor.execute(task, workspace_dir=workspace_dir))
     event_collector.assert_completed_successfully()
 
     assert_file_exists(workspace_dir / "fastapi_app", "main.py")
@@ -61,7 +61,7 @@ async def test_add_health_endpoint(
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
 async def test_fix_broken_code(
-    agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path, test_run_logger
+    executor: TaskExecutor, event_collector: EventCollector, workspace_dir: Path, test_run_logger
 ) -> None:
     """Fix all bugs in broken_code fixture."""
 
@@ -76,7 +76,7 @@ async def test_fix_broken_code(
         "After fixing, run the tests again to make sure all tests pass."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
+    await event_collector.collect_until_done(executor.execute(task, workspace_dir=workspace_dir))
 
     event_collector.assert_completed_successfully()
 
@@ -108,7 +108,7 @@ async def test_fix_broken_code(
 @pytest.mark.asyncio
 @pytest.mark.timeout(900)
 async def test_add_feature_with_tests(
-    agent_team: AgentTeam, event_collector: EventCollector, workspace_dir: Path, test_run_logger
+    executor: TaskExecutor, event_collector: EventCollector, workspace_dir: Path, test_run_logger
 ) -> None:
     """Add complete feature with implementation, tests, and documentation."""
 
@@ -123,7 +123,7 @@ async def test_add_feature_with_tests(
         "Run pytest to make sure all tests pass."
     )
 
-    await event_collector.collect_until_done(agent_team.execute(task, workspace_dir=workspace_dir))
+    await event_collector.collect_until_done(executor.execute(task, workspace_dir=workspace_dir))
 
     event_collector.assert_completed_successfully()
 

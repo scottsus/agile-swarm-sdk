@@ -1,12 +1,16 @@
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-from agile_ai_sdk import AgentTeam
+from agile_ai_sdk import AgentTeam, SoloAgentHarness
 from tests.helpers.event_collector import EventCollector
 from tests.helpers.workspace_utils import create_test_workspace, generate_test_run_id
 from tests.logging.run_logger import TestRunLogger
+
+if TYPE_CHECKING:
+    from agile_ai_sdk import SoloAgentHarness, TaskExecutor
 
 
 @pytest.fixture
@@ -71,8 +75,45 @@ async def agent_team() -> AsyncGenerator[AgentTeam, None]:
     team = AgentTeam()
     yield team
 
-    for agent in team.agents.values():
-        agent.stop()
+
+@pytest.fixture
+def solo_harness() -> "SoloAgentHarness":
+    """Fresh SoloAgentHarness instance per test.
+
+    Example:
+        >>> async def test_execute(solo_harness, event_collector):
+        ...     await event_collector.collect_until_done(
+        ...         solo_harness.execute("List files")
+        ...     )
+    """
+
+    return SoloAgentHarness()
+
+
+@pytest.fixture(params=["solo", "team"])
+def executor(request) -> "TaskExecutor":
+    """Parametrized fixture to test both AgentTeam and SoloAgentHarness.
+
+    Both implementations satisfy the TaskExecutor protocol, ensuring
+    they have compatible APIs for task execution.
+
+    By default, both executors are tested (solo first, then team).
+    Use pytest's -k flag to filter:
+        pytest -k "solo" # SoloAgentHarness only
+        pytest -k "team" # AgentTeam only
+        pytest           # Both executors
+
+    Example:
+        >>> async def test_simple_task(executor, event_collector):
+        ...     await event_collector.collect_until_done(
+        ...         executor.execute("Echo hello")
+        ...     )
+        ...     event_collector.assert_completed_successfully()
+    """
+    if request.param == "team":
+        return request.getfixturevalue("agent_team")
+    else:  # solo
+        return request.getfixturevalue("solo_harness")
 
 
 @pytest.fixture(autouse=True)

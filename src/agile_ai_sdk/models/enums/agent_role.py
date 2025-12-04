@@ -8,3 +8,4 @@ class AgentRole(str, Enum):
     PLANNER = "planner"
     DEV = "developer"
     SENIOR_REVIEWER = "senior_reviewer"
+    CODE_ACT = "code_act"
