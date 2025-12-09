@@ -1,6 +1,6 @@
 from typing import Any
 
-from tests.helpers.time_utils import timestamp_iso
+from agile_ai_sdk.utils.time import timestamp_iso
 
 
 class TestRunMetadata:

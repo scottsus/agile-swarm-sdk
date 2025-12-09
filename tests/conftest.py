@@ -18,22 +18,21 @@ def run_dir() -> Path:
     """Create unique run directory for this test.
 
     Structure:
-        .agile/runs/run_20251203_135403_386373/
+        .agile/runs/test_2025-12-08_19:16:15/
         ├── fixtures/          # workspace fixtures
         │   ├── broken_code/
         │   ├── fastapi_app/
         │   └── simple_python/
-        └── logs/             # test run logs
-            ├── metadata.json
-            ├── events.jsonl
-            ├── command_outputs/
-            ├── llm_judge/
-            ├── workspace/
-            └── journal.json
+        ├── metadata.json      # test run logs
+        ├── events.jsonl
+        ├── command_outputs/
+        ├── llm_judge/
+        ├── workspace/
+        └── journal.json
 
     Example:
         >>> async def test_something(run_dir):
-        ...     print(run_dir)  # .agile/runs/run_xxx
+        ...     print(run_dir)  # .agile/runs/test_xxx
     """
 
     repo_root = Path(__file__).parent.parent
@@ -56,7 +55,7 @@ def workspace_dir(run_dir: Path) -> Path:
 
     Example:
         >>> async def test_something(workspace_dir):
-        ...     # workspace_dir = .agile/runs/run_xxx/fixtures/
+        ...     # workspace_dir = .agile/runs/test_xxx/fixtures/
         ...     await team.execute("cd simple_python && ls", workspace_dir=workspace_dir)
     """
     return create_test_workspace(run_dir, copy_fixtures=True)
@@ -123,15 +122,13 @@ def test_run_logger(request: pytest.FixtureRequest, run_dir: Path) -> Generator[
     This fixture runs automatically for all tests and:
     1. extracts test metadata from pytest request
     2. determines test tier from markers (smoke/scenario/feature)
-    3. creates structured log directory at .agile/runs/run_xxx/logs/
+    3. creates structured log directory at .agile/runs/test_xxx/
     4. yields TestRunLogger for use in test
     5. finalizes logs with pass/fail status on teardown
 
     The logger automatically captures:
     - Test metadata (name, file, tier, task)
     - Events (when used with event_collector)
-    - Command outputs (via log_command_output)
-    - Workspace snapshots (via save_workspace)
     - LLM judge evaluations (via log_llm_judge_evaluation)
 
     Example:
@@ -141,7 +138,7 @@ def test_run_logger(request: pytest.FixtureRequest, run_dir: Path) -> Generator[
         ...     # Logger is automatically active
         ...     # Events are automatically logged
         ...     await event_collector.collect_until_done(...)
-        ...     # Logs saved to .agile/runs/run_xxx/logs/
+        ...     # Logs saved to .agile/runs/test_xxx/
     """
     test_name = request.node.name
     test_file = str(request.node.fspath)
@@ -155,7 +152,7 @@ def test_run_logger(request: pytest.FixtureRequest, run_dir: Path) -> Generator[
     task = request.node.get_closest_marker("task")
     task_description = task.args[0] if task else "No task specified"
 
-    log_dir = run_dir / "logs"
+    log_base_dir = run_dir.parent
     run_id = run_dir.name
 
     logger = TestRunLogger(
@@ -163,7 +160,7 @@ def test_run_logger(request: pytest.FixtureRequest, run_dir: Path) -> Generator[
         test_file=test_file,
         test_tier=tier,
         task=task_description,
-        log_dir=log_dir,
+        log_dir=log_base_dir,
         run_id=run_id,
     )
 
@@ -197,7 +194,7 @@ def event_collector(request: pytest.FixtureRequest) -> EventCollector:
         ...     event_collector.assert_completed_successfully()
 
         >>> async def test_with_logging(event_collector, test_run_logger):
-        ...     # Events automatically logged to ~/.agile-ai/test-runs/
+        ...     # Events automatically logged to .agile/runs/test_*/
         ...     await event_collector.collect_until_done(...)
     """
 

@@ -9,7 +9,8 @@ from agile_ai_sdk.agents.base import BaseAgent
 from agile_ai_sdk.core.events import EventStream
 from agile_ai_sdk.core.router import MessageRouter
 from agile_ai_sdk.executor import TaskExecutor
-from agile_ai_sdk.models import AgentRole, Event, EventHandler, EventType, HumanRole
+from agile_ai_sdk.logging import EventLogger
+from agile_ai_sdk.models import AgentRole, Event, EventHandler, EventType, HumanRole, RunStatus
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,11 @@ class AgentTeam(TaskExecutor):
         >>> await team.drop_message("Quick fix")
     """
 
-    def __init__(self, agents: list[AgentRole] | None = None):
+    def __init__(
+        self,
+        agents: list[AgentRole] | None = None,
+        log_dir: str | Path | None = ".agile/runs",
+    ):
         """Initialize the agent team."""
 
         self.enabled_agents = agents or [
@@ -81,6 +86,17 @@ class AgentTeam(TaskExecutor):
         self._event_handlers: dict[EventType, list[EventHandler]] = {}
         self._on_any_handlers: list[EventHandler] = []
         self._broadcaster_task: asyncio.Task[Any] | None = None
+
+        # Logging support
+        self._logger: EventLogger | None = None
+        self._had_error: bool = False
+
+        if log_dir is not None:
+            self._logger = EventLogger(
+                task="AgentTeam Session",
+                log_dir=Path(log_dir),
+            )
+            self.on_any_event(self._logger.log_event)
 
     def _init_agents(self) -> None:
         """Initialize enabled agents."""
@@ -160,12 +176,16 @@ class AgentTeam(TaskExecutor):
         # Route all messages to EM
         await self.agents[AgentRole.EM].drop_in_inbox(source=HumanRole.USER, content=content)
 
-
     async def stop(self) -> None:
         """Stop the agent team and clean up resources."""
 
         if not self._started:
             return  # Already stopped, no-op
+
+        # Finalize logger before teardown
+        if self._logger:
+            status = RunStatus.ERROR if self._had_error else RunStatus.COMPLETED
+            self._logger.finalize(status=status)
 
         # Cancel broadcaster task if running
         if self._broadcaster_task and not self._broadcaster_task.done():
@@ -253,6 +273,10 @@ class AgentTeam(TaskExecutor):
         it's logged but other handlers still execute.
         """
 
+        # Track errors for logger finalization
+        if event.type == EventType.RUN_ERROR:
+            self._had_error = True
+
         # Dispatch to specific event type handlers
         if event.type in self._event_handlers:
             for handler in self._event_handlers[event.type]:
@@ -281,6 +305,11 @@ class AgentTeam(TaskExecutor):
                 exc_info=True,
                 extra={"event_type": event.type, "handler": handler_name},
             )
+
+    def get_log_dir(self) -> Path | None:
+        """Get the log directory path for this team's run."""
+
+        return self._logger.get_log_dir() if self._logger else None
 
     async def _teardown(self, agent_tasks: list[asyncio.Task[Any]]) -> None:
         """Cleans up dangling resources"""

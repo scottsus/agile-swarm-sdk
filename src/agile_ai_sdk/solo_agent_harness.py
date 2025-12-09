@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from collections.abc import Callable
@@ -8,7 +10,8 @@ from agile_ai_sdk.agents.code_act_agent import CodeActAgent
 from agile_ai_sdk.core.events import EventStream
 from agile_ai_sdk.core.router import MessageRouter
 from agile_ai_sdk.executor import TaskExecutor
-from agile_ai_sdk.models import AgentRole, Event, EventHandler, EventType, HumanRole
+from agile_ai_sdk.logging import EventLogger
+from agile_ai_sdk.models import AgentRole, Event, EventHandler, EventType, HumanRole, RunStatus
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +39,11 @@ class SoloAgentHarness(TaskExecutor):
         >>> await harness.drop_message("List files and echo hello")
     """
 
-    def __init__(self) -> None:
-        """Initialize the single-agent harness."""
+    def __init__(
+        self,
+        log_dir: str | Path | None = ".agile/runs",
+    ) -> None:
+        """Initialize the single-agent harness"""
 
         self.event_stream = EventStream()
         self.router = MessageRouter(self.event_stream)
@@ -52,6 +58,17 @@ class SoloAgentHarness(TaskExecutor):
         self._event_handlers: dict[EventType, list[EventHandler]] = {}
         self._on_any_handlers: list[EventHandler] = []
         self._broadcaster_task: asyncio.Task[Any] | None = None
+
+        # Logging support
+        self._logger: EventLogger | None = None
+        self._had_error: bool = False
+
+        if log_dir is not None:
+            self._logger = EventLogger(
+                task="SoloAgent Session",
+                log_dir=Path(log_dir),
+            )
+            self.on_any_event(self._logger.log_event)
 
     async def start(self, workspace_dir: Path | None = None) -> None:
         """Start the single agent and begin processing loop."""
@@ -101,12 +118,16 @@ class SoloAgentHarness(TaskExecutor):
 
         await self.agent.drop_in_inbox(source=HumanRole.USER, content=content)
 
-
     async def stop(self) -> None:
         """Stop the agent and clean up resources."""
 
         if not self._started:
             return  # Already stopped, no-op
+
+        # Finalize logger before teardown
+        if self._logger:
+            status = RunStatus.ERROR if self._had_error else RunStatus.COMPLETED
+            self._logger.finalize(status=status)
 
         # Cancel broadcaster task if running
         if self._broadcaster_task and not self._broadcaster_task.done():
@@ -195,6 +216,10 @@ class SoloAgentHarness(TaskExecutor):
         it's logged but other handlers still execute.
         """
 
+        # Track errors for logger finalization
+        if event.type == EventType.RUN_ERROR:
+            self._had_error = True
+
         # Dispatch to specific event type handlers
         if event.type in self._event_handlers:
             for handler in self._event_handlers[event.type]:
@@ -223,6 +248,11 @@ class SoloAgentHarness(TaskExecutor):
                 exc_info=True,
                 extra={"event_type": event.type, "handler": handler_name},
             )
+
+    def get_log_dir(self) -> Path | None:
+        """Get the log directory path for this agent's run."""
+
+        return self._logger.get_log_dir() if self._logger else None
 
     async def _teardown(self, agent_tasks: list[asyncio.Task[Any]]) -> None:
         """Cleans up dangling resources"""

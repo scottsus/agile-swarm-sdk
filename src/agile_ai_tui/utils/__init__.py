@@ -1,7 +1,3 @@
-"""Utility functions for the TUI.
+from agile_ai_tui.utils.formatters import EventFormatter
 
-Phase 2: Empty, reserved for future utilities.
-Phase 3+: May include formatters, event handlers, etc.
-"""
-
-__all__ = []
+__all__ = ["EventFormatter"]

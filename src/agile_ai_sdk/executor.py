@@ -2,7 +2,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from agile_ai_sdk.models import Event, EventHandler, EventType
+from agile_ai_sdk.models import EventHandler, EventType
 
 
 class TaskExecutor(Protocol):

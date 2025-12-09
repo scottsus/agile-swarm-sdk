@@ -1,8 +1,9 @@
 import re
 import shutil
 import subprocess
-from datetime import datetime
 from pathlib import Path
+
+from agile_ai_sdk.utils.time import timestamp_readable
 
 """Workspace filesystem utilities for validating what actually happened.
 
@@ -20,8 +21,7 @@ Example:
 def generate_test_run_id() -> str:
     """Generate unique run ID for test runs."""
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    return f"run_{timestamp}"
+    return f"test_{timestamp_readable()}"
 
 
 def create_test_workspace(run_dir: Path, copy_fixtures: bool = True) -> Path:
@@ -30,7 +30,7 @@ def create_test_workspace(run_dir: Path, copy_fixtures: bool = True) -> Path:
     Example:
         >>> workspace = create_test_workspace(run_dir)
         >>> workspace
-        Path('.agile/runs/run_20231215_143052_123456/fixtures')
+        Path('.agile/runs/test_2023-12-15_14:30:52/fixtures')
         >>> list(workspace.iterdir())
         [Path('broken_code'), Path('fastapi_app'), Path('simple_python')]
     """

@@ -161,6 +161,30 @@ agile-ai
 agi
 ```
 
+## Event Logging
+
+### Log Directory Structure
+
+All runs use the unified format `run_YYYY-MM-DD_HH:MM/`:
+
+```
+.agile/runs/run_2025-12-08_19:41/
+├── metadata.json         # Run info and results
+├── events.jsonl          # Event stream (one JSON per line)
+├── workspace/            # Final workspace snapshot (optional)
+└── journal.json          # Agent conversation history (optional)
+```
+
+### Event Stream Format
+
+Events are logged in JSONL format (one JSON object per line):
+
+```json
+{"timestamp": "2025-12-06T14:30:22.123456Z", "type": "RUN_STARTED", "agent": "engineering_manager", "data": {"task": "Add /health endpoint"}}
+{"timestamp": "2025-12-06T14:30:23.456789Z", "type": "STEP_STARTED", "agent": "developer", "data": {"step": 1}}
+{"timestamp": "2025-12-06T14:30:45.789012Z", "type": "RUN_FINISHED", "agent": "engineering_manager", "data": {"result": "success"}}
+```
+
 ## Contributing
 
 This project is <1 week old, not accepting contributions atm, but lmk if it sounds interesting ✨

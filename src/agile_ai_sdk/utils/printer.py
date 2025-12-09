@@ -1,4 +1,4 @@
-from agile_ai_sdk import Event, EventType
+from agile_ai_sdk.models import Event, EventType
 
 # Color codes
 GRAY = "\033[90m"

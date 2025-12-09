@@ -126,16 +126,6 @@ class EngineeringManager(BaseAgent):
         try:
             result = await self.ai_agent.run(user_prompt, message_history=self.conversation_history, deps=deps)
             self.conversation_history.extend(result.new_messages())
-
-            # If there's output, emit it
-            if result.output:
-                await self.event_stream.emit(
-                    Event(
-                        type=EventType.TEXT_MESSAGE_CONTENT,
-                        agent=self.role,
-                        data={"message": f"[DEBUG] EM output: {result.output}"},
-                    )
-                )
         except Exception as e:
             await self.event_stream.emit(
                 Event(
