@@ -1,7 +1,16 @@
 from dataclasses import dataclass
-from typing import Literal
+from enum import Enum
 
 from agile_ai_sdk.models import AgentRole
+
+
+class MessageType(str, Enum):
+    """Type of message for display."""
+
+    USER = "user"
+    AGENT = "agent"
+    SYSTEM = "system"
+    ERROR = "error"
 
 
 @dataclass
@@ -12,7 +21,7 @@ class FormattedMessage:
         >>> msg = FormattedMessage(
         ...     sender="Dev",
         ...     content="Task completed",
-        ...     message_type="agent",
+        ...     message_type=MessageType.AGENT,
         ...     agent_role=AgentRole.DEV
         ... )
         >>> msg.sender
@@ -21,5 +30,7 @@ class FormattedMessage:
 
     sender: str
     content: str
-    message_type: Literal["user", "agent", "system", "error"]
+    message_type: MessageType
     agent_role: AgentRole | None = None
+    is_collapsible: bool = False
+    full_content: str | None = None

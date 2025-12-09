@@ -1,6 +1,5 @@
 import asyncio
 from pathlib import Path
-from typing import Literal
 
 from textual import on
 from textual.app import ComposeResult
@@ -10,7 +9,9 @@ from textual.widgets import Input, Static
 
 from agile_ai_sdk import AgentTeam
 from agile_ai_sdk.models import Event
+from agile_ai_tui.models import MessageType
 from agile_ai_tui.utils import EventFormatter
+from agile_ai_tui.widgets import CollapsibleMessage
 
 
 class ChatMessage(Static):
@@ -32,7 +33,7 @@ class ChatMessage(Static):
         self,
         content: str,
         sender: str = "You",
-        message_type: Literal["user", "agent", "system", "error"] = "user",
+        message_type: MessageType = MessageType.USER,
     ) -> None:
         super().__init__()
         self.content = content
@@ -43,13 +44,13 @@ class ChatMessage(Static):
     def _format(self) -> str:
         """Format message based on type."""
 
-        if self.message_type == "user":
+        if self.message_type == MessageType.USER:
             return f"[bold blue]{self.sender}:[/bold blue] {self.content}"
-        elif self.message_type == "agent":
+        elif self.message_type == MessageType.AGENT:
             return f"[bold green]{self.sender}:[/bold green] {self.content}"
-        elif self.message_type == "system":
+        elif self.message_type == MessageType.SYSTEM:
             return f"[dim]{self.sender}: {self.content}[/dim]"
-        elif self.message_type == "error":
+        elif self.message_type == MessageType.ERROR:
             return f"[bold red]{self.sender}:[/bold red] {self.content}"
         else:
             return f"[bold]{self.sender}:[/bold] {self.content}"
@@ -154,7 +155,7 @@ class ChatScreen(Screen):
         event.input.value = ""
 
         container = self.query_one("#message-container", VerticalScroll)
-        await container.mount(ChatMessage(message, sender="You", message_type="user"))
+        await container.mount(ChatMessage(message, sender="You", message_type=MessageType.USER))
 
         container.scroll_end(animate=False)
 
@@ -179,15 +180,26 @@ class ChatScreen(Screen):
             if formatted is None:
                 return
 
-            message_widget = ChatMessage(
-                content=formatted.content,
-                sender=formatted.sender,
-                message_type=formatted.message_type,
-            )
-
             container = self.query_one("#message-container", VerticalScroll)
-            await container.mount(message_widget)
 
+            if formatted.is_collapsible and formatted.full_content:
+                header = f"{formatted.sender}: {formatted.message_type.value.capitalize()}"
+                await container.mount(
+                    CollapsibleMessage(
+                        header=header,
+                        preview=formatted.content,
+                        full_content=formatted.full_content,
+                        message_type=formatted.message_type,
+                    )
+                )
+            else:
+                await container.mount(
+                    ChatMessage(
+                        content=formatted.content,
+                        sender=formatted.sender,
+                        message_type=formatted.message_type,
+                    )
+                )
             container.scroll_end(animate=False)
 
         except Exception as e:
@@ -200,7 +212,7 @@ class ChatScreen(Screen):
             error_widget = ChatMessage(
                 content=error,
                 sender="System",
-                message_type="error",
+                message_type=MessageType.ERROR,
             )
 
             container = self.query_one("#message-container", VerticalScroll)

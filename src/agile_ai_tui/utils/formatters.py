@@ -1,5 +1,5 @@
 from agile_ai_sdk.models import AgentRole, Event, EventType, HumanRole
-from agile_ai_tui.models import FormattedMessage
+from agile_ai_tui.models import FormattedMessage, MessageType
 
 
 class EventFormatter:
@@ -17,6 +17,8 @@ class EventFormatter:
         'Starting task: test'
     """
 
+    MAX_PREVIEW_LENGTH = 500
+
     AGENT_DISPLAY_NAMES = {
         AgentRole.EM: "EM",
         AgentRole.PLANNER: "Planner",
@@ -32,33 +34,58 @@ class EventFormatter:
         Returns:
             FormattedMessage if event should be displayed, None if filtered
         """
+        handlers = {
+            EventType.RUN_STARTED: cls._format_run_started,
+            EventType.RUN_FINISHED: cls._format_run_finished,
+            EventType.RUN_ERROR: cls._format_run_error,
+            EventType.TEXT_MESSAGE_CONTENT: cls._format_text_message,
+            EventType.STEP_STARTED: cls._format_step_started,
+            EventType.STEP_FINISHED: cls._format_step_finished,
+            EventType.TOOL_CALL_START: cls._format_tool_call_start,
+            EventType.TOOL_CALL_RESULT: cls._format_tool_call_result,
+        }
 
-        if event.type == EventType.RUN_STARTED:
-            return cls._format_run_started(event)
+        handler = handlers.get(event.type)
+        return handler(event) if handler else None
 
-        elif event.type == EventType.RUN_FINISHED:
-            return cls._format_run_finished(event)
+    @classmethod
+    def _create_message_with_preview(
+        cls,
+        content: str,
+        sender: str,
+        message_type: MessageType,
+        agent_role: AgentRole | None = None,
+        prefix: str = "",
+    ) -> FormattedMessage:
+        """Create a FormattedMessage with automatic preview for long content.
 
-        elif event.type == EventType.RUN_ERROR:
-            return cls._format_run_error(event)
+        Args:
+            content: The message content
+            sender: The sender name
+            message_type: Type of message (system, agent, error)
+            agent_role: Optional agent role
+            prefix: Optional prefix to add to short content (e.g., "Error: ", "Tool result: ")
+        """
+        is_long = len(content) > cls.MAX_PREVIEW_LENGTH
 
-        elif event.type == EventType.TEXT_MESSAGE_CONTENT:
-            return cls._format_text_message(event)
-
-        elif event.type == EventType.STEP_STARTED:
-            return cls._format_step_started(event)
-
-        elif event.type == EventType.STEP_FINISHED:
-            return cls._format_step_finished(event)
-
-        elif event.type == EventType.TOOL_CALL_START:
-            return cls._format_tool_call_start(event)
-
-        elif event.type == EventType.TOOL_CALL_RESULT:
-            return cls._format_tool_call_result(event)
-
+        if is_long:
+            preview = content[: cls.MAX_PREVIEW_LENGTH] + "..."
+            return FormattedMessage(
+                sender=sender,
+                content=preview,
+                message_type=message_type,
+                agent_role=agent_role,
+                is_collapsible=True,
+                full_content=content,
+            )
         else:
-            return None
+            display_content = f"{prefix}{content}" if prefix else content
+            return FormattedMessage(
+                sender=sender,
+                content=display_content,
+                message_type=message_type,
+                agent_role=agent_role,
+            )
 
     @classmethod
     def _format_run_started(cls, event: Event) -> FormattedMessage:
@@ -66,7 +93,7 @@ class EventFormatter:
         return FormattedMessage(
             sender="System",
             content=f"Starting task: {task}",
-            message_type="system",
+            message_type=MessageType.SYSTEM,
         )
 
     @classmethod
@@ -74,40 +101,56 @@ class EventFormatter:
         return FormattedMessage(
             sender="System",
             content="Task completed successfully",
-            message_type="system",
+            message_type=MessageType.SYSTEM,
         )
 
     @classmethod
     def _format_run_error(cls, event: Event) -> FormattedMessage:
         error = event.data.get("error", "Unknown error")
-        return FormattedMessage(
+        error_str = str(error)
+
+        return cls._create_message_with_preview(
+            content=error_str,
             sender="System",
-            content=f"Error: {error}",
-            message_type="error",
+            message_type=MessageType.ERROR,
+            prefix="Error: ",
         )
 
     @classmethod
     def _format_text_message(cls, event: Event) -> FormattedMessage | None:
-        if event.data.get("action") == "sent":
+        action = event.data.get("action")
+
+        if action == "sent":
             return None
+        elif action == "received":
+            return cls._format_received_message(event)
+        else:
+            return cls._format_agent_message(event)
 
-        if event.data.get("action") == "received":
-            content = event.data.get("content", "")
-            agent_name = cls._get_agent_name(event.agent)
-            return FormattedMessage(
-                sender=agent_name,
-                content=f"[received] {content}",
-                message_type="system",
-                agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
-            )
+    @classmethod
+    def _format_received_message(cls, event: Event) -> FormattedMessage:
+        """Format a received message event."""
+        content = event.data.get("content", "")
+        agent_name = cls._get_agent_name(event.agent)
+        formatted_content = f"[received] {content}"
 
+        return cls._create_message_with_preview(
+            content=formatted_content,
+            sender=agent_name,
+            message_type=MessageType.SYSTEM,
+            agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
+        )
+
+    @classmethod
+    def _format_agent_message(cls, event: Event) -> FormattedMessage:
+        """Format a regular agent message event."""
         content = event.data.get("message", "")
         agent_name = cls._get_agent_name(event.agent)
 
-        return FormattedMessage(
-            sender=agent_name,
+        return cls._create_message_with_preview(
             content=content,
-            message_type="agent",
+            sender=agent_name,
+            message_type=MessageType.AGENT,
             agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
         )
 
@@ -132,7 +175,7 @@ class EventFormatter:
         return FormattedMessage(
             sender=agent_name,
             content=f"Starting {step_name}",
-            message_type="system",
+            message_type=MessageType.SYSTEM,
             agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
         )
 
@@ -144,7 +187,7 @@ class EventFormatter:
         return FormattedMessage(
             sender=agent_name,
             content=f"Completed {step_name}",
-            message_type="system",
+            message_type=MessageType.SYSTEM,
             agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
         )
 
@@ -156,7 +199,7 @@ class EventFormatter:
         return FormattedMessage(
             sender=agent_name,
             content=f"Calling tool: {tool}",
-            message_type="system",
+            message_type=MessageType.SYSTEM,
             agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
         )
 
@@ -164,16 +207,14 @@ class EventFormatter:
     def _format_tool_call_result(cls, event: Event) -> FormattedMessage:
         agent_name = cls._get_agent_name(event.agent)
         result = event.data.get("result", "")
+        result_str = str(result)
 
-        max_length = 200
-        if len(str(result)) > max_length:
-            result = str(result)[:max_length] + "..."
-
-        return FormattedMessage(
+        return cls._create_message_with_preview(
+            content=result_str,
             sender=agent_name,
-            content=f"Tool result: {result}",
-            message_type="system",
+            message_type=MessageType.SYSTEM,
             agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
+            prefix="Tool result: ",
         )
 
     @classmethod
