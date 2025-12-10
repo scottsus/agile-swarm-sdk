@@ -18,6 +18,7 @@ logfire = "^4.15.1"
 
 # TUI (optional)
 textual = {version = "^1.0.0", optional = true}
+pygments = {version = "^2.18.0", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.4"
@@ -49,7 +50,7 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.poetry.extras]
-tui = ["textual"]
+tui = ["textual", "pygments"]
 
 [tool.poetry.scripts]
 agile = "agile_ai_tui.__main__:main"

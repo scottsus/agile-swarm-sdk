@@ -71,10 +71,6 @@ class CollapsibleMessage(Vertical):
         padding: 1;
         background: $surface;
     }
-
-    CollapsibleMessage .collapsed {
-        display: none;
-    }
     """
 
     def __init__(
@@ -106,7 +102,7 @@ class CollapsibleMessage(Vertical):
         yield Static(
             self.full_content_text if self.is_expanded else self.preview_text,
             id="content",
-            classes="content" + ("" if self.is_expanded else " collapsed"),
+            classes="content",
         )
 
     async def on_click(self, event: Click) -> None:
@@ -133,7 +129,5 @@ class CollapsibleMessage(Vertical):
 
         if self.is_expanded:
             content.update(self.full_content_text)
-            content.remove_class("collapsed")
         else:
             content.update(self.preview_text)
-            content.add_class("collapsed")

@@ -5,55 +5,20 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Input, Static
+from textual.widget import Widget
+from textual.widgets import Input
 
 from agile_ai_sdk import AgentTeam
-from agile_ai_sdk.models import Event
+from agile_ai_sdk.models import AgentRole, Event
 from agile_ai_tui.models import MessageType
 from agile_ai_tui.utils import EventFormatter
-from agile_ai_tui.widgets import CollapsibleMessage
-
-
-class ChatMessage(Static):
-    """Widget representing a single chat message.
-
-    Supports different message types with appropriate styling:
-    - user: User messages (blue)
-    - agent: Agent messages (green)
-    - system: System messages (dim)
-    - error: Error messages (red)
-
-    Example:
-        >>> ChatMessage("Add /health", "You", "user")  # Blue user message
-        >>> ChatMessage("Working on it", "Dev", "agent")  # Green agent message
-        >>> ChatMessage("Task started", "System", "system")  # Dim system message
-    """
-
-    def __init__(
-        self,
-        content: str,
-        sender: str = "You",
-        message_type: MessageType = MessageType.USER,
-    ) -> None:
-        super().__init__()
-        self.content = content
-        self.sender = sender
-        self.message_type = message_type
-        self.update(self._format())
-
-    def _format(self) -> str:
-        """Format message based on type."""
-
-        if self.message_type == MessageType.USER:
-            return f"[bold blue]{self.sender}:[/bold blue] {self.content}"
-        elif self.message_type == MessageType.AGENT:
-            return f"[bold green]{self.sender}:[/bold green] {self.content}"
-        elif self.message_type == MessageType.SYSTEM:
-            return f"[dim]{self.sender}: {self.content}[/dim]"
-        elif self.message_type == MessageType.ERROR:
-            return f"[bold red]{self.sender}:[/bold red] {self.content}"
-        else:
-            return f"[bold]{self.sender}:[/bold] {self.content}"
+from agile_ai_tui.widgets import (
+    AgentMessage,
+    CollapsibleMessage,
+    SystemMessage,
+    ToolCallMessage,
+    UserMessage,
+)
 
 
 class ChatScreen(Screen):
@@ -95,10 +60,6 @@ class ChatScreen(Screen):
         border: solid $primary;
         padding: 1;
         background: $surface;
-    }
-
-    ChatMessage {
-        margin-bottom: 1;
     }
 
     Input {
@@ -155,7 +116,7 @@ class ChatScreen(Screen):
         event.input.value = ""
 
         container = self.query_one("#message-container", VerticalScroll)
-        await container.mount(ChatMessage(message, sender="You", message_type=MessageType.USER))
+        await container.mount(UserMessage(message))
 
         container.scroll_end(animate=False)
 
@@ -182,24 +143,34 @@ class ChatScreen(Screen):
 
             container = self.query_one("#message-container", VerticalScroll)
 
+            message_widget: Widget
+
             if formatted.is_collapsible and formatted.full_content:
-                header = f"{formatted.sender}: {formatted.message_type.value.capitalize()}"
-                await container.mount(
-                    CollapsibleMessage(
-                        header=header,
-                        preview=formatted.content,
-                        full_content=formatted.full_content,
-                        message_type=formatted.message_type,
-                    )
+                agent_name = formatted.sender
+                message_widget = CollapsibleMessage(
+                    header=f"{agent_name}",
+                    preview=formatted.content,
+                    full_content=formatted.full_content,
+                    message_type=formatted.message_type,
                 )
+
+            elif formatted.message_type == MessageType.USER:
+                message_widget = UserMessage(formatted.content)
+
+            elif formatted.message_type == MessageType.AGENT and formatted.agent_role:
+                message_widget = AgentMessage(formatted.content, formatted.agent_role)
+
+            elif formatted.message_type == MessageType.TOOL_CALL and formatted.tool_data:
+                agent_role = formatted.agent_role or AgentRole.DEV
+                message_widget = ToolCallMessage(agent_role, formatted.tool_data)
+
+            elif formatted.message_type == MessageType.ERROR:
+                message_widget = SystemMessage(formatted.content, is_error=True)
+
             else:
-                await container.mount(
-                    ChatMessage(
-                        content=formatted.content,
-                        sender=formatted.sender,
-                        message_type=formatted.message_type,
-                    )
-                )
+                message_widget = SystemMessage(formatted.content, is_error=False)
+
+            await container.mount(message_widget)
             container.scroll_end(animate=False)
 
         except Exception as e:
@@ -209,11 +180,7 @@ class ChatScreen(Screen):
         """Display an error message in the UI."""
 
         try:
-            error_widget = ChatMessage(
-                content=error,
-                sender="System",
-                message_type=MessageType.ERROR,
-            )
+            error_widget = SystemMessage(error, is_error=True)
 
             container = self.query_one("#message-container", VerticalScroll)
             await container.mount(error_widget)

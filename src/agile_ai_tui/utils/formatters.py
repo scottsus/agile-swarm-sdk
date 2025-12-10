@@ -1,5 +1,5 @@
 from agile_ai_sdk.models import AgentRole, Event, EventType, HumanRole
-from agile_ai_tui.models import FormattedMessage, MessageType
+from agile_ai_tui.models import FormattedMessage, MessageType, ToolCallData
 
 
 class EventFormatter:
@@ -27,6 +27,10 @@ class EventFormatter:
         AgentRole.CODE_ACT: "CodeAct",
     }
 
+    # TODO: we may need to consider a more robust way of storing this
+    # though perhaps in-memory is fine for now
+    _active_tool_calls: dict[str, ToolCallData] = {}
+
     @classmethod
     def format_event(cls, event: Event) -> FormattedMessage | None:
         """Format an event for display.
@@ -42,6 +46,7 @@ class EventFormatter:
             EventType.STEP_STARTED: cls._format_step_started,
             EventType.STEP_FINISHED: cls._format_step_finished,
             EventType.TOOL_CALL_START: cls._format_tool_call_start,
+            EventType.TOOL_CALL_ARGS: cls._format_tool_call_args,
             EventType.TOOL_CALL_RESULT: cls._format_tool_call_result,
         }
 
@@ -195,27 +200,71 @@ class EventFormatter:
     def _format_tool_call_start(cls, event: Event) -> FormattedMessage:
         agent_name = cls._get_agent_name(event.agent)
         tool = event.data.get("tool", "unknown tool")
+        tool_id = event.data.get("tool_id", id(event))
+
+        tool_data = ToolCallData(
+            tool_name=tool,
+            args=None,
+            result=None,
+            status="started",
+        )
+
+        cls._active_tool_calls[str(tool_id)] = tool_data
 
         return FormattedMessage(
             sender=agent_name,
-            content=f"Calling tool: {tool}",
-            message_type=MessageType.SYSTEM,
+            content="",
+            message_type=MessageType.TOOL_CALL,
             agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
+            tool_data=tool_data,
         )
+
+    @classmethod
+    def _format_tool_call_args(cls, event: Event) -> FormattedMessage | None:
+        """Update active tool call with arguments."""
+
+        tool_id = event.data.get("tool_id", None)
+        if tool_id and str(tool_id) in cls._active_tool_calls:
+            args = event.data.get("args", {})
+            cls._active_tool_calls[str(tool_id)].args = args
+
+        return None
 
     @classmethod
     def _format_tool_call_result(cls, event: Event) -> FormattedMessage:
         agent_name = cls._get_agent_name(event.agent)
         result = event.data.get("result", "")
-        result_str = str(result)
+        tool_id = event.data.get("tool_id", None)
 
-        return cls._create_message_with_preview(
-            content=result_str,
-            sender=agent_name,
-            message_type=MessageType.SYSTEM,
-            agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
-            prefix="Tool result: ",
-        )
+        if tool_id and str(tool_id) in cls._active_tool_calls:
+            tool_data = cls._active_tool_calls[str(tool_id)]
+            tool_data.result = str(result)
+            tool_data.status = "success"
+
+            del cls._active_tool_calls[str(tool_id)]
+
+            return FormattedMessage(
+                sender=agent_name,
+                content="",
+                message_type=MessageType.TOOL_CALL,
+                agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
+                tool_data=tool_data,
+            )
+        else:
+            tool_data = ToolCallData(
+                tool_name="unknown",
+                args=None,
+                result=str(result),
+                status="success",
+            )
+
+            return FormattedMessage(
+                sender=agent_name,
+                content="",
+                message_type=MessageType.TOOL_CALL,
+                agent_role=event.agent if isinstance(event.agent, AgentRole) else None,
+                tool_data=tool_data,
+            )
 
     @classmethod
     def get_agent_display_name(cls, agent: AgentRole) -> str:
